@@ -1,96 +1,99 @@
-import React, { Component } from 'react';
-import Searchbar from './searchbar/Searchbar';
-import ImageGallery from './imageGallery/ImageGallery';
-import imagesApi from '../services/imagesApi';
-import Button from './button/Button';
-import Loader from 'react-loader-spinner';
-import Modal from './modal/Modal';
+import React from 'react';
+import { Searchbar } from './searchbar/Searchbar';
+import { ImageGallery } from './imageGallery/ImageGallery';
 
-import styles from './App.module.css';
-import 'react-loader-spinner/dist/loader/css/react-spinner-loader.css';
+import { LoaderSpinner } from './Loader/Loader';
+import { Button } from './button/Button';
+import { Modal } from './modal/Modal';
+import styles from '../styles.module.css';
 
-export default class App extends Component {
+import axios from 'axios';
+axios.defaults.baseURL = 'https://pixabay.com/api';
+const apiKey = '18519763-b48cd53b8f87881ea60fa71d1';
+
+export default class App extends React.Component {
   state = {
-    searchQuery: '',
+    gallery: [],
+    search: '',
     page: 1,
-    results: [],
+    error: null,
+    showModal: false,
     loading: false,
-    modalImage: null,
-    firstFetch: true,
+    originalImageURL: '',
   };
 
-  handleSearchbarSubmit = query => {
-    this.setState({
-      searchQuery: query,
-      results: [],
-      page: 1,
-      firstFetch: true,
-    });
-  };
-
-  componentDidMount() {}
-
-  componentDidUpdate(prevProps, prevState) {
-    const prevQuery = prevState.searchQuery;
-    const nextQuery = this.state.searchQuery;
-
-    prevQuery !== nextQuery && this.fetchImages();
+  componentDidMount() {
+    if (this.state.search) {
+      this.getImages(this.state.search);
+    }
   }
 
-  fetchImages = () => {
-    const { searchQuery, page } = this.state;
+  componentDidUpdate(prevProps, prevState) {
+    if (this.state.search !== prevState.search) {
+      this.getImages(this.state.search);
+    }
+  }
 
-    this.setState({
-      loading: true,
-    });
+  getImages = () => {
+    this.setState({ loading: true });
 
-    imagesApi
-      .fetchImagesWithQuery(searchQuery, page)
-      .then(images => {
+    axios
+      .get(
+        `/?q=${this.state.search}&page=${this.state.page}&key=${apiKey}&image_type=photo&orientation=horizontal&per_page=12`,
+      )
+      .then(response => {
         this.setState(prevState => ({
-          results: [...prevState.results, ...images],
+          gallery: [...prevState.gallery, ...response.data.hits],
+          loading: false,
           page: prevState.page + 1,
         }));
-        if (!this.state.firstFetch) {
-          window.scrollTo({
-            top: document.documentElement.scrollHeight,
-            behavior: 'smooth',
-          });
-        }
       })
-      .catch(error => console.log(error))
       .finally(() => {
-        this.setState({
-          loading: false,
-          firstFetch: false,
+        this.setState({ loading: false });
+
+        window.scrollTo({
+          top: document.documentElement.scrollHeight,
+          behavior: 'smooth',
         });
       });
   };
 
-  openModal = imageUrl => {
-    this.setState({ modalImage: imageUrl });
+  getSearch = search => {
+    this.setState({ search, gallery: [], page: 1 });
   };
 
-  closeModal = e => {
-    this.setState({ modalImage: null });
+  toggleModal = () => {
+    this.setState(({ ShowModal }) => ({ showModal: !ShowModal }));
+  };
+
+  hiddenModal = () => {
+    this.setState({ showModal: false });
+  };
+
+  fetchImages = url => {
+    this.setState({ originalImageURL: url });
   };
 
   render() {
-    const { results, loading, modalImage } = this.state;
+    const { originalImageURL, loading, gallery, showModal } = this.state;
+
     return (
       <div className={styles.App}>
-        <Searchbar onSubmit={this.handleSearchbarSubmit} />
-        <ImageGallery images={results} onClick={this.openModal} />
-        {modalImage && (
-          <Modal largeImage={modalImage} onClose={this.closeModal} />
+        <Searchbar getSearch={this.getSearch} />
+        <ImageGallery
+          fetchImages={this.fetchImages}
+          toggleModal={this.toggleModal}
+          gallery={gallery}
+        />
+        {loading && <LoaderSpinner />}
+        {gallery.length > 0 && !loading && (
+          <Button getImages={this.getImages} />
         )}
-        {loading && (
-          <div className={styles.Loader}>
-            <Loader type="Oval" color="#00BFFF" height={100} width={100} />
-          </div>
-        )}
-        {results.length > 0 && !loading && (
-          <Button onClick={this.fetchImages} />
+        {showModal && (
+          <Modal
+            hiddenModal={this.hiddenModal}
+            largeImageURL={originalImageURL}
+          />
         )}
       </div>
     );
